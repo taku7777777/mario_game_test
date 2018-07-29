@@ -1,0 +1,255 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="http://java.sun.com/jsf/html"
+      xmlns:f="http://java.sun.com/jsf/core"
+      xmlns:ui="http://java.sun.com/jsf/facelets"
+      xmlns:p="http://primefaces.org/ui">
+<h:head>
+   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+   <title>スーパーマリオ</title>
+
+   <script>
+
+      //固定部(ページ読込時に実行される処理)
+      window.addEventListener('load', execute);
+
+      function execute() {
+         //画面の大きさ設定
+         canvas        = document.getElementById('maincanvas');
+         ctx           = canvas.getContext('2d');
+         canvas.width  = SCREEN_WIDTH;
+         canvas.height = SCREEN_HEIGHT;
+
+         //画面を更新するたびに"update"を実行
+         requestAnimationFrame(update);
+
+      }
+
+      // 更新用の関数
+      function update() {
+
+         // 前回情報の保存(決まり文句)
+         requestAnimationFrame(update);
+
+         // キーボードの入力情報の更新(決まり文句)
+         updateKeyboard();
+
+         //更新用のメソッド(座標の更新とかはここ)
+         updateMian();
+
+         //画面の描画の実施(どこにどんな画像を表示するかがここ)
+         render();
+
+      }
+
+      //更新用のメソッド
+      function updateMian(){
+         player.speedX = 0;
+
+         //左ボタンをクリックした際にはマイナスのスピード
+         if(input_key_buffer[37]){
+            player.speedX     = -player.initialSpeedX;
+            player.walkingCount++;
+            player.forntFlg   = false;
+         }
+
+         //右ボタンをクリックした際にはプラスのスピード
+         if(input_key_buffer[39]){
+            player.speedX     =  player.initialSpeedX;
+            player.walkingCount++;
+            player.forntFlg   = true;
+         }
+
+         //徒歩のカウントを初期化
+         //TODO 要リファクタリング
+         if(player.walkingCount >= 48){
+           player.walkingCount = 0;
+         }
+         if(player.speedX == 0){
+           player.walkingCount = 0;
+         }
+
+         //上ボタンをクリックした際にはプラスのスピード
+         if(!player.jumpFlg){
+            if(input_key_buffer[38]){
+               player.speedY     =  player.initialSpeedY;
+               player.jumpFlg    =  true;
+            }
+         }
+
+         //ジャンプ状態であれば重力を作用させる
+         if(player.jumpFlg){
+            player.speedY    -=  GRAVITY;
+         }
+
+         //プレイヤーの表示位置をスピードのぶんだけ増やす
+         player.positionXBefore = player.positionX;
+         player.positionYBefore = player.positionY;
+         player.positionX += player.speedX;
+         player.positionY += player.speedY;
+
+         //着地チェック
+         player.jumpFlg = true;
+         blockList.forEach(function(block) {
+            if((block.positionX < player.positionX + player.width) && (block.positionX + block.width > player.positionX)){
+               if((block.positionY <= player.positionYBefore - player.height) && (block.positionY >= player.positionY - player.height)){
+                  player.jumpFlg = false;
+                  player.speedY  = 0;
+                  player.positionY = block.positionY + player.height;
+               }
+               if((block.positionY - block.height >= player.positionYBefore) && (block.positionY - block.height <= player.positionY)){
+                  if(player.speedY > 0){
+                      player.speedY  = -player.speedY;
+                  }
+                  player.positionY = block.positionY - block.height;
+               }
+            }
+            if((block.positionY > player.positionY - player.height) && (block.positionY - block.height < player.positionY)){
+               if((block.positionX >= player.positionXBefore + player.width) && (block.positionX <= player.positionX + player.width)){
+                  player.positionX = block.positionX - player.width;
+               }
+               if((block.positionX + block.width <= player.positionXBefore) && (block.positionX + block.width >= player.positionX)){
+                  player.positionX = block.positionX + block.width;
+               }
+            }
+         });
+      }
+
+      // 描写用の関数
+      function render() {
+         // 画面全体をクリア
+         ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+         //プレイヤーの描画
+         if(player.forntFlg){
+             player.src = player.imageListWalking[0][Math.floor(player.walkingCount/6)];
+         } else {
+             player.src = player.imageListWalking[1][Math.floor(player.walkingCount/6)];
+         }
+         drawObject(player, true);
+
+         //ブロックの描画
+         blockList.forEach(function(block) {
+            drawObject(block, false);
+         });
+
+      }
+
+      function drawObject(object,upFlg) {
+         var image = new Image();
+         image.src = object.src;
+
+         //描画用に画面に表示する場所を算出
+         var positionX = calcPositionXForView(object);
+         var positionY = calcPositionYForView(object);
+
+         //objectを描画
+         ctx.drawImage(image, positionX, positionY, object.width, object.height);
+      }
+
+      function calcPositionXForView(object){
+         return object.positionX;
+      }
+      function calcPositionYForView(object){
+         return SCREEN_HEIGHT - object.positionY;
+      }
+
+      //スクリーンの設定値
+      var SCREEN_WIDTH  = 1200;
+      var SCREEN_HEIGHT = 750;
+      var SCREEN_BUFFER = 250;
+      var DEFAULT_POSITION_X = 100;
+      var DEFAULT_POSITION_Y = 100;
+
+      //キャラクターの設定値
+      var GRAVITY                =  0.4;
+      var INITIAL_SPEED_X        =  2.0;
+      var INITIAL_SPEED_Y        = 10.0;
+      var CHARACTEUR_SIZE_WIDTH  = 32.0;
+      var CHARACTEUR_SIZE_HEIGHT = 32.0;
+
+
+      //マリオの定義
+      var Mario = function(){
+         this.width         = CHARACTEUR_SIZE_WIDTH;
+         this.height        = CHARACTEUR_SIZE_HEIGHT;
+         this.src           = 'images/mario_default.jpg';
+         this.positionX     = 200;
+         this.positionY     = 100 + CHARACTEUR_SIZE_HEIGHT;
+         this.speedX        = 0;
+         this.speedY        = 0;
+         this.initialSpeedX = INITIAL_SPEED_X;
+         this.initialSpeedY = INITIAL_SPEED_Y;
+         this.jumpFlg       = false;
+         this.forntFlg      = true;
+         this.imageListWalking = [
+            [
+               'images/mario/walkingRight01.jpg',
+               'images/mario/walkingRight02.jpg',
+               'images/mario/walkingRight03.jpg',
+               'images/mario/walkingRight04.jpg',
+               'images/mario/walkingRight05.jpg',
+               'images/mario/walkingRight06.jpg',
+               'images/mario/walkingRight07.jpg',
+               'images/mario/walkingRight08.jpg',
+            ],
+            [
+               'images/mario/walkingLeft01.jpg',
+               'images/mario/walkingLeft02.jpg',
+               'images/mario/walkingLeft03.jpg',
+               'images/mario/walkingLeft04.jpg',
+               'images/mario/walkingLeft05.jpg',
+               'images/mario/walkingLeft06.jpg',
+               'images/mario/walkingLeft07.jpg',
+               'images/mario/walkingLeft08.jpg',
+            ],
+         ];
+         this.walkingCount = 0;
+      }
+
+      //プレイヤーのキャラとしてマリオを使用する
+      var player = new Mario();
+
+      //ブロックの定義
+      var Block = function(positionX,positionY,width,height){
+         this.width     = width;
+	 this.height    = height;
+         this.src       = 'images/ground.jpg';
+         this.positionX = positionX;
+         this.positionY = positionY;
+      }
+
+     var blockList = [
+        new Block(   0,100,500,32),
+        new Block( 550,100,500,32),
+        new Block( 200,200,100,32),
+        new Block( 700,300,32,160),
+     ];
+
+      // キーボードが押されているか話されているかチェック
+      var input_key_buffer  = new Array();
+
+      function updateKeyboard(){
+         document.onkeydown = function (e){
+            if(!e) e = window.event; // レガシー
+            input_key_buffer[ e.keyCode] = true;
+            //alert(e.keyCode);
+         };
+         document.onkeyup = function (e){
+            if(!e) e = window.event; // レガシー
+            input_key_buffer[ e.keyCode] = false;
+         };
+      }
+
+   </script>
+   <style type="text/css">
+      canvas { background-color:#CCFFFF; border: 1px solid #999; }
+   </style>
+
+</h:head>
+<h:body>
+
+ 	<canvas id="maincanvas"></canvas>
+
+</h:body>
+</html>
